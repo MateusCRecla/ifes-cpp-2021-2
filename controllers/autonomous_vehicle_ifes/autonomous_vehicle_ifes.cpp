@@ -301,7 +301,7 @@ void update_display() {
   //char txt[64]; ----->
   //sprintf(txt, "GPS coords: %.1f %.1f", gps_coords[X], gps_coords[Z]); ----->
   std::string txt;
-  txt = " GPS coords" + std::to_string(gps_coords[X]) + " " + std::to_string(gps_coords[Z]);
+  txt = "GPS coords: " + std::to_string(gps_coords[X]) + " " + std::to_string(gps_coords[Z]);
   
  //wb_display_draw_text(display, txt, 10, 130); ----->
   display->drawText(txt, 10, 130);
