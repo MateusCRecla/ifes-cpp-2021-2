@@ -33,6 +33,9 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <fstream>
+#include <cmath>
+
 
 webots::Keyboard teclado;
 webots::Driver motorista;
@@ -54,6 +57,11 @@ enum { X, Y, Z };
 #define KD 2
 
 bool PID_need_reset = false;
+bool saving = true;
+bool close_the_file = false;
+bool save_initial_coord = false;
+
+int waiting_time = 0;
 
 // Size of the yellow line angle filter
 #define FILTER_SIZE 3
@@ -95,6 +103,7 @@ webots::GPS *gps;
 
 double gps_coords[3] = {0.0, 0.0, 0.0};
 double gps_speed = 0.0;
+double i_coords[2] = {0.0, 0.0};
 
 
 // misc variables
@@ -322,7 +331,12 @@ void compute_gps_speed() {
   
   // store into global variables
   gps_speed = speed_ms * 3.6;  // convert from m/s to km/h
-  memcpy(gps_coords, coords, sizeof(gps_coords));
+
+  //memcpy(gps_coords, coords, sizeof(gps_coords)); ----->
+  
+   for(int i = 0; i < 3;i++)
+    gps_coords[i] = coords[i];
+    
 }
 
 double applyPID(double yellow_line_angle) {
@@ -349,11 +363,66 @@ double applyPID(double yellow_line_angle) {
   return KP * yellow_line_angle + KI * integral + KD * diff;
 }
 
+void print_coordinates()
+{
+  std::cout<<"X: "<<gps_coords[X]<<"  Z: "<<gps_coords[Z]<<std::endl;   
+}
 
+void save_initial_coordinates(double &x, double &z)
+{
+  if((!save_initial_coord) && (!std::isnan(gps_coords[X])) && (!std::isnan(gps_coords[Z])))
+  {
+    save_initial_coord = true;
+    x = gps_coords[X];
+    z = gps_coords[Z];
+    std::cout <<"Inital coordinates has been set to: " << x <<", "<<z<<std::endl;
+  }
+}
+
+bool its_in_the_coords(double coords[2])
+{
+  return (std::abs(coords[0] - gps_coords[X]) < 1) && (std::abs(coords[1] - gps_coords[Z]) < 1);
+}
+
+void getRange(double po)
+{
+  std::cout<< std::abs(po - gps_coords[Z])<<std::endl;
+}
+
+
+void save_coordinates(std::ofstream &file)
+{
+  if(!close_the_file)
+  {
+    
+      save_initial_coordinates(i_coords[0], i_coords[1]);
+      if(waiting_time >= 100)
+      {
+        waiting_time = 100;
+        if(its_in_the_coords(i_coords))
+        {
+          std::cout <<"Closing the file"<<std::endl;
+          close_the_file = true;
+          file.close();
+          return;
+        }
+      }
+      if((!std::isnan(gps_coords[X])) && (!std::isnan(gps_coords[Z])))    
+        file<<gps_coords[X]<<", "<<gps_coords[Z]<<std::endl;
+      if((waiting_time >= 4) && saving)
+      {
+        std::cout<<"Saving coordinates..."<<std::endl;
+        saving = false;
+      }
+      waiting_time++;
+   }
+}
 
 int main(int argc, char **argv) {
   //wbu_driver_init(); substituido pelo construtor da classe Driver
-
+  
+  std::ofstream coords_file;
+  coords_file.open("coordinates.txt");
   // check if there is a SICK and a display
   
  /* 
@@ -467,10 +536,10 @@ int main(int argc, char **argv) {
  
   // main loop
   while (motorista.step() != -1) {
-    // get user input
+    // get user inputcssscccscccccc
     check_keyboard();
     static int i = 0;
-    
+   
     // updates sensors only every TIME_STEP milliseconds
     //if (i % (int)(TIME_STEP / wb_robot_get_basic_time_step()) == 0) { ---->
       // read sensors
@@ -536,8 +605,11 @@ int main(int argc, char **argv) {
       }
 
       // update stuff
-      if (has_gps)
+      if (has_gps){
         compute_gps_speed();
+        save_coordinates(coords_file);
+        
+      }        
       if (enable_display)
         update_display();
     }
@@ -546,7 +618,6 @@ int main(int argc, char **argv) {
     //
     ++i;
   }
-  
-    
+  coords_file.close();  
   return 0;
 }
